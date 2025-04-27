@@ -1,5 +1,7 @@
-from langchain_community.document_loaders import WebBaseLoader
-from langchain_community.document_loaders.sitemap import SitemapLoader
+# from langchain_community.document_loaders import WebBaseLoader
+from langchain_community.document_loaders import PyPDFLoader
+
+# from langchain_community.document_loaders.sitemap import SitemapLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 # from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -21,13 +23,11 @@ client = Groq(api_key=groq_api_key)
 
 # System prompt (defining ChaiBot behavior)
 system_prompt = """
-    You are ChaiBot, an intelligent documentation assistant trained specifically on the official ChaiCode documentation from the context provided.
+    You are Bloodwork BOT, an intelligent Doctor assistant trained specifically on the official bloodwork from the context provided.
 
 You work in a START → PLAN → ANALYZE → RETRIEVE → ACCUMULATE → OUTPUT workflow when answering user queries.
 
-You will ONLY be using the context retrieved from the ChaiCode documentation to answer the user questions. If the answer requires referencing a specific page, provide the exact URL from the context.
-
-If no relevant information is found, say that:"I couldn't find relevant information about that in the ChaiCode docs"
+If no relevant information is found, say that:"I couldn't find relevant information about that in the report"
 
 The workflow for the user query is as follows:
 
@@ -67,7 +67,7 @@ When answering the queries:
 - If multiple parts of the documentation are relevant, combine them carefully and maintain all context and structure.
 - If the answer requires referencing a specific page, provide the exact URL from the documentation context with a small brief of why you are redirecting the user to the given URL.
 - If the code is available than add the code also.
-- If no relevant information is found, say: "I couldn't find relevant information about that in the ChaiCode docs."
+- If no relevant information is found, say: "I couldn't find relevant information about that in the report."
 
 REMEMBER:- you would always use JSON FORMAT for your response:
 
@@ -81,61 +81,30 @@ DONOT generate any response such that it gets diverted or altered from the above
 
 Example Question and answers:-
 
-1)How can I build a chatbot that answers questions based on the contents of a GitHub repository using LangChain?
+1)what does high BP levels signify with respect to my report?
   
-  Output:-
+  [
   {
     "step": "plan",
-    "content": "To build a chatbot that answers questions based on a GitHub repo using LangChain, I'll need to (1) fetch the repo contents, (2) process and chunk the text, (3) store it in a vector store, (4) create a retriever, and (5) set up a conversational chain using LangChain with a language model and retriever."
+    "content": "First, I'll explain what BP (blood pressure) is, then discuss what 'high' BP means medically, review possible reasons in a report context, and finally summarize potential health implications."
   },
-  Output:-
   {
     "step": "analyze",
-    "content": "The main components involved are GitHub integration (to get the code), text processing (to chunk and clean data), vector storage (like FAISS or Chroma), and LangChain's retrieval-based QA chain."
+    "content": "Blood pressure measures the force of blood against artery walls. A higher than normal BP suggests the heart is working harder than it should, possibly due to lifestyle, stress, diet, or underlying health conditions."
   },
-  Output:-
   {
     "step": "retrieve",
-    "content": "I'll use LangChain's `GitHubRepoLoader` to fetch repo contents and then `RecursiveCharacterTextSplitter` to split text. For storage, I'll choose `FAISS` as the vector store and use `OpenAIEmbeddings` to embed the chunks."
+    "content": "According to medical guidelines, normal BP is around 120/80 mmHg. Values consistently above 130/80 mmHg are considered high (hypertension) and could increase risks for heart disease, stroke, and kidney problems."
   },
-  Output:-
   {
-    "step": "accumulate",
-    "content": "Once the repo contents are embedded and stored in FAISS, I can use LangChain's `RetrievalQA` chain with an LLM like `ChatOpenAI`. This setup allows the chatbot to respond to questions by retrieving relevant chunks from the repo and generating responses."
+    "step": "synthesize",
+    "content": "In the context of your report, high BP levels could be a sign of early hypertension. It might suggest a need for lifestyle changes (like diet, exercise, stress management) or further medical evaluation to prevent complications."
   },
-  Output:-
   {
     "step": "output",
-    "content": "You can now create an API using FastAPI where the user submits a question, and the chatbot answers it using LangChain's QA chain with the GitHub repo as the knowledge base."
+    "content": "High BP in your report indicates your heart and blood vessels are under extra strain, and it would be wise to discuss these findings with your doctor for personalized advice and possible preventive steps."
   }
-
-2)How does the self-attention work in a Transformer? 
-   
-  Output:-
-  {
-    "step": "plan",
-    "content": "To explain self-attention, I'll first define what it is, then describe how queries, keys, and values work, walk through the computation steps, and finally explain why it’s useful in Transformers."
-  },
-  Output:-
-  {
-    "step": "analyze",
-    "content": "Self-attention allows each token in a sequence to weigh the importance of every other token. It's based on computing attention scores using queries, keys, and values derived from the input embeddings."
-  },
-  Output:-
-  {
-    "step": "retrieve",
-    "content": "The formula for scaled dot-product attention is: Attention(Q, K, V) = softmax(QKᵀ / √d_k) V. Each token is projected into a query (Q), key (K), and value (V) vector using learned matrices."
-  },
-  Output:-
-  {
-    "step": "accumulate",
-    "content": "For each token, its query is compared with the keys of all other tokens to get attention scores. These scores determine how much focus (weight) should be given to the corresponding value vectors. The result is a weighted sum of the values, which becomes the new representation of the token."
-  },
-  Output:-
-  {
-    "step": "output",
-    "content": "In short, self-attention enables each word in a sequence to dynamically attend to other words, capturing context and relationships efficiently, which is key to the Transformer's power."
-  }
+]
 """
 
 # Message list
@@ -146,14 +115,13 @@ messages = [
     }
 ]
 
-# 🚀 SETUP QDRANT DATABASE FUNCTIONS
 
 def setup_qudrant_db(split_docs, embedder):
     print("🛠 Setting up Qdrant collection and uploading documents...")
     vector_store = QdrantVectorStore.from_documents(
         documents=split_docs,
         url="http://localhost:6333",
-        collection_name="chaicode_docs",  # ⚡ Updated name here
+        collection_name="Bloodwork_db",  
         embedding=embedder
     )
     print("✅ Successfully uploaded documents to Qdrant!")
@@ -162,18 +130,14 @@ def setup_retriever_db(embedder):
     print("🔎 Setting up retriever from existing collection...")
     retriever = QdrantVectorStore.from_existing_collection(
         url="http://localhost:6333",
-        collection_name="chaicode_docs",  # ⚡ Same name here
+        collection_name="Bloodwork_db",  
         embedding=embedder
     )
     return retriever
 
-# 📄 LOAD AND SPLIT DOCUMENTS
-
-def sitemap_loader(path):
-    print("🌐 Loading documents from sitemap...")
-    sitemap_loader = SitemapLoader(web_path=path, is_local=True)
-    docs = sitemap_loader.load()
-    print(f"📄 Loaded {len(docs)} documents from sitemap.")
+def doc_generator(pdf_path):
+    loader = PyPDFLoader(file_path=pdf_path)
+    docs = loader.load()
     return docs
 
 def split_text(docs):
@@ -182,29 +146,6 @@ def split_text(docs):
         chunk_size=1000,
         chunk_overlap=200
     )
-    
-    for doc in docs:
-        if hasattr(doc, "metadata"):
-            if isinstance(doc.metadata, dict):
-                source = doc.metadata.get("source", "no data found")
-            else:
-                source = "no data found"
-        elif isinstance(doc, dict):
-            metadata = doc.get("metadata", {})
-            if isinstance(metadata, dict):
-                source = metadata.get("source", "no data found")
-            else:
-                source = "no data found"
-        else:
-            source = "no data found"
-
-        title_segment = source.strip("/").split("/")[-1]
-        title = title_segment.replace("-", " ").title()
-        
-        if hasattr(doc, "page_content"):
-            doc.page_content += f"\n\n[{title}]({source})"
-        elif isinstance(doc, dict):
-            doc["page_content"] += f"\n\n[{title}]({source})"
 
     texts = text_splitter.split_documents(docs)
     print(f"✅ Finished splitting into {len(texts)} chunks.")
@@ -221,7 +162,7 @@ def get_context_for_query(query, retriever):
 
 # 🚀 MAIN CHATBOT RUN FUNCTION
 
-class ChaiBotAssistant:
+class bloodworkAssistant:
     def __init__(self):
         self.client = client
         self.messages = messages
@@ -235,18 +176,18 @@ class ChaiBotAssistant:
 
     def run(self):
         print("\n" + "=" * 60)
-        print("🚀 ChaiBot Documentation Assistant 🚀")
+        print("🚀 Bloodwork Bot 🚀")
         print("=" * 60)
-        print("\nA RAG-powered assistant for ChaiCode documentation.")
+        print("\nA RAG-powered assistant for your bloodwork.")
         print("\nType 'exit' to quit the assistant.")
         print("=" * 60 + "\n")
 
         try:
             while True:
-                query = input("➤ Ask about ChaiCode docs: ")
+                query = input("➤ Ask about your uploaded bloodwork: ")
                 
                 if query.lower() in ["exit", "quit"]:
-                    print("\n👋 Goodbye! ChaiBot Documentation Assistant is shutting down.")
+                    print("\n👋 Goodbye! Your Bloodwork Assistant is shutting down.")
                     break
 
                 # Fetch context
@@ -254,7 +195,7 @@ class ChaiBotAssistant:
 
                 # Update conversation
                 self.messages.append({"role": "user", "content": query})
-                self.messages.append({"role": "assistant", "content": f"Relevant ChaiCode documentation context:\n\n{context}"})
+                self.messages.append({"role": "assistant", "content": f"Relevant documentation context:\n\n{context}"})
 
                 conversation_active = True
                 current_step = None
@@ -353,16 +294,16 @@ def setup_and_run():
     embedder = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
     # Step 2: Load docs
-    # docs = sitemap_loader("sitemap_final.xml")  
+    docs = doc_generator("PE0451300080542717_RLS.pdf")  
 
     # Step 3: Split docs
-    # split_docs = split_text(docs)
+    split_docs = split_text(docs)
 
     # Step 4: Upload to Qdrant
-    # setup_qudrant_db(split_docs, embedder)
+    setup_qudrant_db(split_docs, embedder)
 
     # Step 5: Initialize bot
-    chatbot = ChaiBotAssistant()
+    chatbot = bloodworkAssistant()
 
     # # Step 6: Setup retriever
     chatbot.retriever = setup_retriever_db(embedder)
