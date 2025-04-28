@@ -1,6 +1,10 @@
 # from langchain_community.document_loaders import WebBaseLoader
 from langchain_community.document_loaders import PyPDFLoader
-
+from fastapi import FastAPI, HTTPException , File,Form ,UploadFile
+from pydantic import BaseModel
+import shutil
+import uuid
+from typing import List
 # from langchain_community.document_loaders.sitemap import SitemapLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 # from langchain_google_genai import GoogleGenerativeAIEmbeddings
@@ -21,6 +25,7 @@ groq_api_key = os.getenv('GROQ_API_KEY')
 # Initialize OpenAI client (for Gemini)
 client = Groq(api_key=groq_api_key)
 
+count = 0  # Counter for Qdrant collection names
 # System prompt (defining ChaiBot behavior)
 system_prompt = """
     You are Bloodwork BOT, an intelligent Doctor assistant trained specifically on the official bloodwork from the context provided.
@@ -82,7 +87,7 @@ DONOT generate any response such that it gets diverted or altered from the above
 Example Question and answers:-
 
 1)what does high BP levels signify with respect to my report?
-  
+
   [
   {
     "step": "plan",
@@ -116,21 +121,21 @@ messages = [
 ]
 
 
-def setup_qudrant_db(split_docs, embedder):
+def setup_qudrant_db(split_docs, embedder , count):
     print("🛠 Setting up Qdrant collection and uploading documents...")
     vector_store = QdrantVectorStore.from_documents(
         documents=split_docs,
         url="http://localhost:6333",
-        collection_name="Bloodwork_db",  
+        collection_name=f"Bloodwork_db_{count}",  
         embedding=embedder
     )
     print("✅ Successfully uploaded documents to Qdrant!")
 
-def setup_retriever_db(embedder):
+def setup_retriever_db(embedder,count):
     print("🔎 Setting up retriever from existing collection...")
     retriever = QdrantVectorStore.from_existing_collection(
         url="http://localhost:6333",
-        collection_name="Bloodwork_db",  
+        collection_name=f"Bloodwork_db_{count}",  
         embedding=embedder
     )
     return retriever
@@ -289,28 +294,35 @@ class bloodworkAssistant:
 
 
 
-def setup_and_run():
+def setup_and_run(path):
     # Step 1: Embedder
     embedder = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
     # Step 2: Load docs
-    docs = doc_generator("PE0451300080542717_RLS.pdf")  
+    docs = doc_generator(path)  
 
     # Step 3: Split docs
     split_docs = split_text(docs)
 
     # Step 4: Upload to Qdrant
-    setup_qudrant_db(split_docs, embedder)
+    setup_qudrant_db(split_docs, embedder,count)
 
     # Step 5: Initialize bot
     chatbot = bloodworkAssistant()
 
     # # Step 6: Setup retriever
-    chatbot.retriever = setup_retriever_db(embedder)
+    chatbot.retriever = setup_retriever_db(embedder,count)
 
     # # Step 7: Run chatbot
     chatbot.run()
 
 # 🧠 RUN THE WHOLE THING
+
+app = FastAPI()
+class ChatRequest(BaseModel):
+    query: str
+class ChatResponse(BaseModel):
+    responses: List[dict]
+
 if __name__ == "__main__":
     setup_and_run()
