@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 
-FASTAPI_URL = "http://localhost:8000"
+FASTAPI_URL = "https://chatbot-bloodwork-1.onrender.com"
 
 st.title("🩺 Bloodwork Assistant Dashboard")
 
